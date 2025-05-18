@@ -1,0 +1,24 @@
+name: Sync(同步/更新脚本) #手动更新上游代码
+on:
+  #schedule:
+    #- cron: '0 16 * * *'
+  workflow_dispatch:
+jobs:
+  repo-sync:
+    env:
+      PAT: ${{ secrets.PAT }} #此处PAT需要申请，教程详见：https://www.jianshu.com/p/bb82b3ad1d11,需要repo和workflow权限
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    if: github.event.repository.owner.id == github.event.sender.id
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: sync linuxdo-checkin    #自定义名称
+        uses: repo-sync/github-sync@v2
+        if: env.PAT
+        with:
+          source_repo: "https://github.com/doveppp/linuxdo-checkin.git"   #同步的源仓库地址
+          source_branch: "main"
+          destination_branch: "master"
+          github_token: ${{ secrets.PAT }}
