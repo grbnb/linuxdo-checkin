@@ -1,0 +1,49 @@
+name: 'test_wk'
+
+on:
+  schedule:
+    #- cron: '0 1 * * *'  # 每天1点 UTC 时间执行
+    - cron: "3 4 * * *"
+  # 点击star时触发运行
+  #watch:
+    #types: started
+  # 手动触发
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions: write-all
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+        with:
+          token: ${{ secrets.PAT }}
+          fetch-depth: 2
+        
+      
+      - name: Random Cron
+        uses: grbnb/random-workflow-cron@v2
+        with:
+          github_token: ${{ secrets.PAT }}
+          #push_switch: false
+          keep_history: true
+          time_zone: "UTC+8"
+          hour_start: 0
+          hour_end: 21
+          interval_count: 2
+          cron_dmw: "*/16 * *"
+          
+      - name: run bash
+        env:
+          workflow_name: ${{ github.workflow_ref }}
+        run: |
+          echo ${{ github.workflow_ref }}
+          ls -a
+          echo ${workflow_name%%@*}
+          mkdir dists && cp -r ./.github ./dists
+          ls -a . ./dists/.github
+          workflow_name=$(echo "${workflow_name}" | sed 's/^[^/]*\/[^/]*\///;s/@.*$//')
+          cat ${workflow_name}
+      

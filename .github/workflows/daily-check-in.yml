@@ -1,0 +1,76 @@
+name: Daily Check-in
+
+on:
+  schedule:
+    #- cron: '0 1 * * *'  # 每天1点 UTC 时间执行
+    - cron: "53 22,6 * * *"
+
+  workflow_dispatch:
+
+jobs:
+  run_script:
+    runs-on: ubuntu-22.04
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@main
+        with:
+          token: ${{ secrets.PAT }}
+          fetch-depth: 2
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9.19'
+
+      - name: Install python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install --with-deps firefox
+
+      - name: Execute script
+        env:
+          USERNAME: ${{ secrets.USERNAME }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          LINUXDO_USERNAME: ${{ secrets.LINUXDO_USERNAME }}
+          LINUXDO_PASSWORD: ${{ secrets.LINUXDO_PASSWORD }}
+          GOTIFY_URL: ${{ secrets.GOTIFY_URL }}
+          GOTIFY_TOKEN: ${{ secrets.GOTIFY_TOKEN }}
+          SC3_PUSH_KEY: ${{ secrets.SC3_PUSH_KEY }}
+          BROWSE_ENABLED: ${{ secrets.BROWSE_ENABLED }}
+        run: |
+          python main.py
+
+      - name: Send Telegram Notification
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_USERID: ${{ secrets.TELEGRAM_USERID }}
+        if: ${{ success() && env.TELEGRAM_TOKEN != '' && env.TELEGRAM_USERID != '' }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ env.TELEGRAM_TOKEN }}/sendMessage" \
+          -d chat_id=${{ env.TELEGRAM_USERID }} \
+          -d parse_mode=HTML \
+          -d text="✅ <b>LINUX DO</b> 每日签到成功完成"
+
+      - name: Send Failure Notification
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_USERID: ${{ secrets.TELEGRAM_USERID }}
+        if: ${{ failure() && env.TELEGRAM_TOKEN != '' && env.TELEGRAM_USERID != '' }}
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ env.TELEGRAM_TOKEN }}/sendMessage" \
+          -d chat_id=${{ env.TELEGRAM_USERID }} \
+          -d parse_mode=HTML \
+          -d text="❌ <b>LINUX DO</b> 每日签到失败"
+
+
+      - name: Random Cron
+        uses: grbnb/random-workflow-cron@dev
+        with:
+          github_token: ${{ secrets.PAT }}
+          #push_switch: false
+          keep_history: true
+          time_zone: "UTC+8"
+          hour_start: 0
+          hour_end: 21
+          interval_count: 2

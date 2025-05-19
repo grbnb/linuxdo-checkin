@@ -1,0 +1,94 @@
+###
+#使用说明：
+#此工作流为手动＋非手动触发运行，二者的环境变量互不干扰！
+#1、如需要清空commit历史提交记录，务必添加GIT_EMAIL变量，否则任何触发都不会清空
+#2、非手动触发时，默认只清理10天内的workflow历史工作流，如需添加定时清空commit日志功能，请根据第45行说明自行设置分支和开启运行。
+#3、手动触发时请根据提示选择即可！
+###
+
+name: '日志自动清理'
+
+on:
+  # 定时调度
+  # schedule:
+  #   - cron: '0 0 */7 * *'
+  # 点击star时触发运行
+  #watch:
+    #types: started
+  # 手动触发
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: 'Log level'
+        required: true
+        default: 'warning'
+      workflowday:
+        description: '保留指定天数内的工作流，默认10天内'
+        required: true
+        default: '10'
+      clearlog:
+        description: '是否启用清空commit提交日志，勾选启用，默认不启用'
+        type: boolean
+        required: true
+        default: 'false'
+      branchs:
+        description: 'branch：请填写需要处理的分支，如main(未勾上方选项时无效)'
+        required: true
+        default: ''
+
+jobs:
+  auto-clearing:
+    runs-on: ubuntu-latest
+    permissions: write-all
+    steps:
+      - name: decision ENV
+        id: decision
+        # 此处非手动触发时生效的变量(配合第63行说明, 条件做注释；将自动清空指定分支的commit提交日志, 谨慎使用)
+        env:
+          #REF_BRANCH: output  ## 选择一个需要处理的其他分支名，这里选的output分支
+          REF_BRANCH: ${{ github.ref_name }}  ## 处理当前默认主分支时启用(二选一,务必填写正确)
+        run: |
+          [ ! ${{ github.event.inputs.logLevel }} ] && {
+              echo AUTO_RUN="true" >> $GITHUB_OUTPUT
+              echo RETAIN_DAYS="10" >> $GITHUB_ENV
+              exit 0
+          }
+          echo RETAIN_DAYS=${{ github.event.inputs.workflowday }} >> $GITHUB_ENV
+        
+      - name: Delete workflow runs
+        uses: Mattraks/delete-workflow-runs@v2
+        with:
+          keep_minimum_runs: '3'
+          retain_days: ${{ env.RETAIN_DAYS }}
+
+        ## 非手动触发时不运行清空commit日志工作流(如需运行，请将65行注释掉或删除行)
+      - name: decide ref_branch
+        if: ${{ steps.decision.outputs.AUTO_RUN != 'true' }}
+        run: |
+          [ ! ${{ github.event.inputs.logLevel }} ] && {
+              echo BRANCH=${{ env.REF_BRANCH }} >> $GITHUB_ENV
+              exit 0
+          }
+          [ ${{ github.event.inputs.clearlog }} == 'true' ] && echo BRANCH=${{ github.event.inputs.branchs }} >> $GITHUB_ENV
+          exit 0
+          
+      - name: Checkout
+        if: ${{ env.BRANCH }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BRANCH }}
+
+      - name: Clearing history commit logs
+        env:
+          EMAIL: ${{ secrets.GIT_EMAIL }}  ## 去secrets中添加GIT_EMAIL变量, 值为GitHub邮箱, 否则不清空！
+        if: ${{ env.BRANCH && env.EMAIL }}
+        run: |
+          git config user.name ${{ github.repository_owner }}
+          git config user.email $EMAIL
+          git checkout --orphan latest_branch
+          git rm -rf --cached .
+          git add -A
+          git commit -m "Clear commits"
+          git show-ref -q --heads ${{ env.BRANCH }} && git branch -D ${{ env.BRANCH }}
+          git branch -m ${{ env.BRANCH }}
+          git push -f origin ${{ env.BRANCH }}
