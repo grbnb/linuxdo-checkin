@@ -3,7 +3,7 @@ name: 'test_wk'
 on:
   schedule:
     #- cron: '0 1 * * *'  # 每天1点 UTC 时间执行
-    - cron: "3 4 * * *"
+    - cron: "43 1,4 */16 * *"
   # 点击star时触发运行
   #watch:
     #types: started
